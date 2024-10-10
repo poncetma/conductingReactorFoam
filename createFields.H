@@ -94,5 +94,21 @@ volScalarField q_s
     mesh
 );
 
+//Adding a dummy scalar value field, S, which can be read in from the preCICE adapter
+Info<< "Reading field S\n" << endl;
+
+volScalarField S
+(
+    IOobject
+    (
+        "S",
+        runTime.timeName(),
+        mesh,
+        IOobject::MUST_READ,
+        IOobject::AUTO_WRITE
+    ),
+    mesh
+);
+
 
 #include "createFvOptions.H"

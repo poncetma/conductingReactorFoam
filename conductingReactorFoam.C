@@ -89,16 +89,27 @@ int main(int argc, char *argv[])
 		//This loop performs multiple solves of the heat equation, since the input of fvOptions becomes an explicit source
         while (simple.correctNonOrthogonal())
         {
+			//solve a dummy "heat source equation" which just takes an input from fvOptions 
+			fvScalarMatrix qsEqn
+			(
+				fvm::ddt(q_s) //OF knows to make this equal to 0
+				//fvm::ddt(S)
+			);
+			fvOptions.correct(q_s); 
+			//fvOptions.correct(S); 
+			
+			//solve the heat equation
             fvScalarMatrix TEqn
             (
                 fvm::ddt(T) - fvm::laplacian(DT, T)
              ==
-                q_s*DT/k + fvOptions(T)  //added the temperature change due to the heat source
+                q_s*DT/k //+ fvOptions(T)  
+				//S*DT/k //+ fvOptions(T)  //added the temperature change due to the heat source
             );
 
-            fvOptions.constrain(TEqn);
+            //fvOptions.constrain(TEqn);
             TEqn.solve();
-            fvOptions.correct(T);
+            //fvOptions.correct(T);
         }
 
         #include "write.H"
