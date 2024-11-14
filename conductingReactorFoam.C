@@ -95,7 +95,8 @@ int main(int argc, char *argv[])
 				fvm::ddt(q_s) //OF knows to make this equal to 0
 				//fvm::ddt(S)
 			);
-			fvOptions.correct(q_s); 
+			fvOptions.correct(q_s); //Should assume that the powershape passed in is normalised. 
+			
 			//fvOptions.correct(S); 
 			
 			//solve the heat equation
@@ -103,7 +104,9 @@ int main(int argc, char *argv[])
             (
                 fvm::ddt(T) - fvm::laplacian(DT, T)
              ==
-                q_s*DT/k //+ fvOptions(T)  
+                100.0e6*q_s*DT/k //Here's the chance to amplify the field given by the neutronics solver
+				
+				//+ fvOptions(T)  
 				//S*DT/k //+ fvOptions(T)  //added the temperature change due to the heat source
             );
 
