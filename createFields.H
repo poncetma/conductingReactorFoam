@@ -20,7 +20,7 @@ volScalarField DT
 (
     IOobject
     (
-        "DT",
+        "DT", //defined as k/rho/cp
         runTime.timeName(),
         mesh,
         IOobject::READ_IF_PRESENT,

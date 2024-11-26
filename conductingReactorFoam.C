@@ -62,10 +62,12 @@ Description
 
 int main(int argc, char *argv[])
 {
+	/*
     argList::addNote
     (
         "Laplace equation solver for a scalar quantity."
     );
+	*/
 
     #include "postProcess.H"
 
@@ -81,13 +83,37 @@ int main(int argc, char *argv[])
     // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
     Info<< "\nCalculating temperature distribution\n" << endl;
+	
+	//Take some inspiration from GeN-Foam here (eigenvalue vs transient neutronics selection, see the neutronics class)
+	bool isTransient;
+	
+	IOdictionary simulationType
+    (
+        IOobject
+        (
+            "simulationType",
+            mesh.time().constant(),
+            mesh,
+            IOobject::MUST_READ,
+            IOobject::NO_WRITE
+        )
+    );
 
+	isTransient = simulationType.lookupOrDefault("isTransient", false);
+	if (isTransient) {
+		Info << "We have a transient simulation." << nl << endl;
+	}
+	else {
+		Info << "Running a steady-state simulation." << nl << endl;
+	}
+	
+
+	//This loop performs multiple solves of the heat equation at each time-step, since the input of fvOptions becomes an explicit source
     while (simple.loop())
     {
         Info<< "Time = " << runTime.timeName() << nl << endl;
-
-		//This loop performs multiple solves of the heat equation, since the input of fvOptions becomes an explicit source
-        while (simple.correctNonOrthogonal())
+		
+        while (simple.correctNonOrthogonal()) //Give the option of non-orthogonal correction iterations. Currently defaulting to just 1 iteration
         {
 			//solve a dummy "heat source equation" which just takes an input from fvOptions 
 			fvScalarMatrix qsEqn
@@ -96,23 +122,27 @@ int main(int argc, char *argv[])
 				//fvm::ddt(S)
 			);
 			fvOptions.correct(q_s); //Should assume that the powershape passed in is normalised. 
-			
 			//fvOptions.correct(S); 
 			
 			//solve the heat equation
-            fvScalarMatrix TEqn
+			//Try to formulate this in a more general way
+			fvScalarMatrix TEqn
             (
-                fvm::ddt(T) - fvm::laplacian(DT, T)
-             ==
-                100.0e6*q_s*DT/k //Here's the chance to amplify the field given by the neutronics solver
-				
+                -fvm::laplacian(DT, T) == q_s*DT/k //Here's the chance to amplify the field given by the neutronics solver
 				//+ fvOptions(T)  
 				//S*DT/k //+ fvOptions(T)  //added the temperature change due to the heat source
             );
-
+			if (isTransient) {
+				TEqn += fvm::ddt(T);
+			}
+			
             //fvOptions.constrain(TEqn);
-            TEqn.solve();
+            SolverPerformance<double> solverPerf = TEqn.solve(); 
             //fvOptions.correct(T);
+			
+			//Try manually fetching and printing the residual
+			Info<< "ATTN" << nl << endl;
+			Info<< "T residual = " << solverPerf.finalResidual() << nl << endl;
         }
 
         #include "write.H"
