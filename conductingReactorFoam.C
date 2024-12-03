@@ -107,41 +107,63 @@ int main(int argc, char *argv[])
 		Info << "Running a steady-state simulation." << nl << endl;
 	}
 	
+	//read the desired nominal power from the same input dict 
+	double nominal_power;	
+	nominal_power = simulationType.lookupOrDefault("nominalPower", 0.0);
+	Info << "Read the nominal power: " << nominal_power << " W" << nl << endl;
+	
+	
+	//Compute total mesh volume
+	scalar total_volume(0.0);
+	forAll(mesh.cells(),cellI)
+	{
+		total_volume += mesh.V()[cellI];
+	}
+	Info << "The volume of the mesh (fuel) is:" << total_volume << " m3" << nl << endl;
 
+
+	double integral_power;
 	//This loop performs multiple solves of the heat equation at each time-step, since the input of fvOptions becomes an explicit source
     while (simple.loop())
     {
         Info<< "Time = " << runTime.timeName() << nl << endl;
 		
-        while (simple.correctNonOrthogonal()) //Give the option of non-orthogonal correction iterations. Currently defaulting to just 1 iteration
+        while (simple.correctNonOrthogonal()) //Give the option of non-orthogonal correction iterations. Defaults to just 1 iteration.
         {
 			//solve a dummy "heat source equation" which just takes an input from fvOptions 
 			fvScalarMatrix qsEqn
 			(
-				fvm::ddt(q_s) //OF knows to make this equal to 0
-				//fvm::ddt(S)
+				fvm::ddt(q_s) //OF knows to make this equal to 0				
 			);
-			fvOptions.correct(q_s); //Should assume that the powershape passed in is normalised. 
-			//fvOptions.correct(S); 
+			fvOptions.correct(q_s); 
+			
+			/*			
+			q_s should be rescaled based on the nominal power (do this directly in the source term).
+			FF will pass a power density field which is normalised to the initial power (as computed in a proportional but inexact way by FF),
+			so it can be scaled by the true nominal power to recover the true power density. 	
+			*/
+			
+			//check that the integral power is properly recovered (should match the nominal power at t=0)
+			integral_power = 0.0; 
+			forAll(mesh.cells(),cellI)
+			{
+				integral_power += mesh.V()[cellI]*(q_s[cellI]*nominal_power/total_volume);
+			}			
+			Info << "The integral power is:" << integral_power << " W" << nl << endl;
 			
 			//solve the heat equation
-			//Try to formulate this in a more general way
 			fvScalarMatrix TEqn
             (
-                -fvm::laplacian(DT, T) == q_s*DT/k //Here's the chance to amplify the field given by the neutronics solver
-				//+ fvOptions(T)  
-				//S*DT/k //+ fvOptions(T)  //added the temperature change due to the heat source
+                -fvm::laplacian(DT, T) == (q_s*nominal_power/total_volume)*DT/k //Here's the chance to amplify the field given by the neutronics solver				
             );
 			if (isTransient) {
 				TEqn += fvm::ddt(T);
-			}
-			
-            //fvOptions.constrain(TEqn);
-            SolverPerformance<double> solverPerf = TEqn.solve(); 
-            //fvOptions.correct(T);
+			}			
+            
+            SolverPerformance<double> solverPerf = TEqn.solve();             
 			
 			//Try manually fetching and printing the residual
-			Info<< "ATTN" << nl << endl;
+			Info<< "Checking solver performance..." << nl << endl;
 			Info<< "T residual = " << solverPerf.finalResidual() << nl << endl;
         }
 
